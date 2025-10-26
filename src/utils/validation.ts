@@ -3,7 +3,9 @@ export const validateEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
+export const validatePassword = (password: string): {
+  message: string; isValid: boolean; errors: string[] 
+} => {
   const errors: string[] = [];
   
   if (password.length < 8) {
