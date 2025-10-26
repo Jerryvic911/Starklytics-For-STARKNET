@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { validateEmail, validatePassword, sanitizeInput } from '@/utils/validation';
-import { handleSupabaseError, getUserFriendlyMessage } from '@/utils/errorHandler';
 import { SocialLoginButtons } from '@/components/auth/SocialLoginButtons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +12,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { BarChart3, UserPlus, LogIn, AlertCircle, Trophy, Briefcase } from 'lucide-react';
 
 export default function Auth() {
-  const { signUp, signIn } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [connectionStatus] = useState<boolean>(true);
 
   // Sign in form
   const [signInEmail, setSignInEmail] = useState('');
@@ -30,6 +26,8 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<'analyst' | 'bounty_creator'>('analyst');
+
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://your-backend-url.com/api';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +41,28 @@ export default function Auth() {
     }
 
     try {
-      const { error } = await signIn(signInEmail, signInPassword);
-      if (error) {
-        setError(getUserFriendlyMessage(handleSupabaseError(error)));
-      }
-    } catch (error: any) {
-      setError(getUserFriendlyMessage(handleSupabaseError(error)));
+      const res = await fetch(`${BACKEND_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: sanitizeInput(signInEmail),
+          password: sanitizeInput(signInPassword),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message || 'Failed to sign in');
+
+      // Save token & user in localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      setMessage('Signed in successfully!');
+      setError('');
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong during sign in');
     } finally {
       setLoading(false);
     }
@@ -74,17 +88,26 @@ export default function Auth() {
     }
 
     try {
-      const { error } = await signUp(signUpEmail, signUpPassword, {
-        full_name: sanitizeInput(fullName),
-        username: sanitizeInput(username),
-        role,
+      const res = await fetch(`${BACKEND_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: sanitizeInput(fullName),
+          username: sanitizeInput(username),
+          email: sanitizeInput(signUpEmail),
+          password: sanitizeInput(signUpPassword),
+          role,
+        }),
       });
 
-      if (error) {
-        setError(getUserFriendlyMessage(handleSupabaseError(error)));
-      }
-    } catch (error: any) {
-      setError(getUserFriendlyMessage(handleSupabaseError(error)));
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message || 'Signup failed');
+
+      setMessage('Account created successfully! You can now sign in.');
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong during sign up');
     } finally {
       setLoading(false);
     }
@@ -106,8 +129,7 @@ export default function Auth() {
           <p className="text-muted-foreground mb-4">
             Join the premier analytics bounty platform for Starknet
           </p>
-          
-          {/* Demo Instructions */}
+
           <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
               🎮 Demo Mode - Try These Credentials:
@@ -147,8 +169,6 @@ export default function Auth() {
                   Sign Up
                 </TabsTrigger>
               </TabsList>
-
-
 
               {error && (
                 <Alert variant="destructive" className="mb-4">
@@ -198,11 +218,7 @@ export default function Auth() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full glow-primary" 
-                    disabled={loading}
-                  >
+                  <Button type="submit" className="w-full glow-primary" disabled={loading}>
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                 </form>
@@ -243,10 +259,13 @@ export default function Auth() {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="role">I want to</Label>
-                    <Select value={role} onValueChange={(value: 'analyst' | 'bounty_creator') => setRole(value)}>
+                    <Select
+                      value={role}
+                      onValueChange={(value: 'analyst' | 'bounty_creator') => setRole(value)}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -256,7 +275,9 @@ export default function Auth() {
                             <Trophy className="w-4 h-4 text-chart-warning" />
                             <div className="text-left">
                               <div className="font-medium">Work on Bounties</div>
-                              <div className="text-xs text-muted-foreground">Solve analytics challenges and earn rewards</div>
+                              <div className="text-xs text-muted-foreground">
+                                Solve analytics challenges and earn rewards
+                              </div>
                             </div>
                           </div>
                         </SelectItem>
@@ -265,7 +286,9 @@ export default function Auth() {
                             <Briefcase className="w-4 h-4 text-chart-primary" />
                             <div className="text-left">
                               <div className="font-medium">Create Bounties</div>
-                              <div className="text-xs text-muted-foreground">Post analytics challenges for the community</div>
+                              <div className="text-xs text-muted-foreground">
+                                Post analytics challenges for the community
+                              </div>
                             </div>
                           </div>
                         </SelectItem>
@@ -295,11 +318,7 @@ export default function Auth() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full glow-primary" 
-                    disabled={loading}
-                  >
+                  <Button type="submit" className="w-full glow-primary" disabled={loading}>
                     {loading ? 'Creating account...' : 'Create Account'}
                   </Button>
                 </form>
